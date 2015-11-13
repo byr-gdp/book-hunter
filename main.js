@@ -1,6 +1,7 @@
 var http = require("http");
 var request = require("request")
 var cheerio = require("cheerio");
+var fs = require('fs');
 
 console.log("Begining to search");
 
@@ -29,44 +30,34 @@ function download(url, callback) {
     });
 }
 
-var urlHead = "http://www.amazon.cn/s/ref=sr_pg_2?rh=n%3A658390051%2Cn%3A%212146619051%2Cn%3A%212146621051%2Cn%3A1548960071%2Cn%3A658414051%2Cp_6%3AA1AJ19PSB66TGU&page=";
-var urlTail = "&bbn=1548960071&ie=UTF8&qid=1447074469";
-for (var j=1; j<=75; j++) {
-    var oneSecond = 100 * j; // one second = 1000 x 1 ms
-    setTimeout(function() {
-        var url = urlHead + j.toString() + urlTail;
-        download(url, function(data) {
-            if (data) {
-                var $ = cheerio.load(data);
-                // console.log(x-1);
-                // console.log('=================================================================');
-                $("a[class='a-link-normal s-access-detail-page  a-text-normal']").each(function(i, e) {
-                    setTimeout(function() {
-                        var bookName = $(e).attr("title");
+var config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
-                        var url = "http://api.douban.com/v2/book/search?q="
-                        + encodeURIComponent(bookName);
-                        request({
-                            url: url,
-                            json: true
-                        }, function (error, response, body) {
-                            if (!error && response.statusCode === 200) {
-                                if (body !== undefined
-                                    && body.books !== undefined
-                                    && body.books[0] !== undefined) {
-                                    // console.log(bookName + " : " + "Get douban rating error!");
-                                // }
-                                // else {
-                                    var aver = parseInt(body.books[0].rating.average);
-                                    if (aver >= 7.5)
-                                        console.log(bookName + " : " + body.books[0].rating.average); // Print the json response
-                                }
-                            }
-                        });
-                    }, oneSecond);
-                });
-            }
-            else console.log("error"); 
+for (var j=1; j<=config.pageNum; j++) {
+    var url = config.pageUrlHead + j + config.pageUrlTail;
+    download(url, function(data) {
+    if (data) {
+        var $ = cheerio.load(data);
+        $(config.DomBookNameSearchExpr).each(function(i, e) {
+            var bookName = $(e).attr("title");
+
+            var rankUrl = config.rankUrlHead + encodeURIComponent(bookName)
+            + config.rankUrlTail;
+            request({
+                url: rankUrl,
+                json: true
+            }, function (error, response, body) {
+                if (!error && response.statusCode === 200) {
+                    if (body !== undefined
+                        && body.books !== undefined
+                        && body.books[0] !== undefined) {
+                        var aver = parseInt(body.books[0].rating.average);
+                        if (aver >= 7.5)
+                            console.log(bookName + " : " + body.books[0].rating.average); // Print the json response
+                    }
+                }
+            });
         });
-    }, oneSecond);
+    }
+    else console.log("error"); 
+});
 }
